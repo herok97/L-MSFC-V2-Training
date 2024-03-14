@@ -39,7 +39,7 @@ class OpenImageDatasetFPN(Dataset):
         if not splitdir.is_dir():
             raise RuntimeError(f'Invalid directory "{root}"')
 
-        self.samples = [f for f in splitdir.iterdir() if f.is_file()]
+        self.samples = sorted([f for f in splitdir.iterdir() if f.is_file()])
         self.transform = transform
         self.mode = split
 

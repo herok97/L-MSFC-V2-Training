@@ -1,29 +1,28 @@
-import argparse, math, random, sys, os
+import argparse
+import math
+import os
+import random
+import sys
+from pathlib import Path
 
-sys.path.append(
-    os.path.dirname(
-        os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-    )
-)
-
-from tensorboardX import SummaryWriter
+import detectron2.data.transforms as T
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-from pathlib import Path
-from omegaconf import OmegaConf
+from data.config import model_arch
 
 # Codec
 from data.dataset import OpenImageDatasetFPN
-from data.config import model_arch
+from omegaconf import OmegaConf
 from src.lmsfcv2 import LMSFC_V2_FPN_FULL
-import torch.nn.functional as F
+from tensorboardX import SummaryWriter
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 # Detectron2
 from compressai_vision.config import create_vision_model
-import detectron2.data.transforms as T
 
 thisdir = Path(__file__).parent
 config_path = str(thisdir.joinpath("../cfgs").resolve())
@@ -43,14 +42,11 @@ def parse_args(argv):
         "-d",
         "--dataset",
         type=str,
-        default="/data/data/openImage/",
+        default="/data/openImage/",
         help="Dataset path, Note that 'openImage/train' and 'openImage/val' directories should exist",
     )
     parser.add_argument(
         "-s", "--safe_load", type=int, default=0, help="1 for safe load"
-    )
-    parser.add_argument(
-        "-p", "--patience", type=int, default=50000, help="patience of scheduler"
     )
     parser.add_argument(
         "-o", "--only_model", type=int, default=0, help="Load only model weights"
@@ -60,34 +56,6 @@ def parse_args(argv):
         "-savedir", "--savedir", type=str, default="save/", help="save_dir"
     )
     parser.add_argument("-logdir", "--logdir", type=str, default="log/", help="log_dir")
-    parser.add_argument(
-        "-total_step",
-        "--total_step",
-        default=5000000,
-        type=int,
-        help="total_step (default: %(default)s)",
-    )
-    parser.add_argument(
-        "-test_step",
-        "--test_step",
-        default=5000,
-        type=int,
-        help="test_step (default: %(default)s)",
-    )
-    parser.add_argument(
-        "-acc_step",
-        "--acc_step",
-        default=1,
-        type=int,
-        help="accumulation_step (default: %(default)s)",
-    )
-    parser.add_argument(
-        "-save_step",
-        "--save_step",
-        default=50000,
-        type=int,
-        help="save_step (default: %(default)s)",
-    )
     parser.add_argument(
         "-lr",
         "--learning-rate",
@@ -102,17 +70,10 @@ def parse_args(argv):
         default=4,
         help="Dataloaders threads (default: %(default)s)",
     )
-
     parser.add_argument(
         "--aux-learning-rate",
         default=1e-3,
         help="Auxiliary loss learning rate (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--save", action="store_true", default=True, help="Save model to disk"
-    )
-    parser.add_argument(
-        "--seed", type=float, default=123, help="Set random seed for reproducibility"
     )
     parser.add_argument(
         "--clip_max_norm",
@@ -201,7 +162,7 @@ def configure_optimizers(net, args):
         for n, p in net.named_parameters()
         if not n.endswith(".quantiles") and p.requires_grad
     }
-    aux_parameters = {  # hyperprior의
+    aux_parameters = {
         n
         for n, p in net.named_parameters()
         if n.endswith(".quantiles") and p.requires_grad
@@ -226,29 +187,7 @@ def configure_optimizers(net, args):
     return optimizer, aux_optimizer
 
 
-def save_feature(title, feature):
-    import matplotlib.pyplot as plt
-
-    feature = feature[0]
-    feature = feature[5]
-    plt.imshow(feature.detach().cpu().numpy(), cmap=plt.cm.jet)
-
-    shrink_scale = 1.0
-    aspect = feature.shape[0] / float(feature.shape[1])
-    if aspect < 1.0:
-        shrink_scale = aspect
-    plt.colorbar(shrink=shrink_scale)
-    plt.clim(-8, 8)
-    plt.tight_layout()
-    plt.title(title)
-    plt.show()
-    plt.savefig(f"./image_result/{title}.png")
-    plt.close()
-
-
-def test(
-    global_step, test_dataloader, compressor, task_model, criterion, logger, lr, args
-):
+def test(epoch, test_dataloader, compressor, task_model, criterion, logger, lr):
     compressor.eval()
     device = next(compressor.parameters()).device
     loss = AverageMeter()
@@ -258,8 +197,8 @@ def test(
     psnr = AverageMeter()
 
     with torch.no_grad():
-        for q in range(8):
-            for i, x in tqdm(enumerate(test_dataloader)):
+        for q in tqdm(range(8), leave=True, desc="Validation\t"):
+            for i, x in tqdm(enumerate(test_dataloader), leave=False):
                 x = x.to(device)
                 features = task_model.input_to_features([{"image": x.squeeze(0)}])[
                     "data"
@@ -278,7 +217,6 @@ def test(
                 )
 
     print(
-        f"Test global_step {global_step}: Average losses:"
         f"\tTest Loss: {loss.avg:.3f} |"
         f"\tTest MSE loss: {mse_loss.avg:.3f} |"
         f"\tTest PSNR: {psnr.avg:.3f} |"
@@ -286,13 +224,12 @@ def test(
         f"\tTest Aux loss: {aux_loss.avg:.2f}\n"
     )
 
-    logger.add_scalar("Test Loss", loss.avg, global_step)
-    logger.add_scalar("Test MSE loss", mse_loss.avg, global_step)
-    logger.add_scalar("Test PSNR", psnr.avg, global_step)
-    logger.add_scalar("Test Bpp loss", bpp_loss.avg, global_step)
-    logger.add_scalar("Test Aux loss", aux_loss.avg, global_step)
-    logger.add_scalar("lr", lr, global_step)
-    return loss.avg
+    logger.add_scalar("Test Loss", loss.avg, epoch)
+    logger.add_scalar("Test MSE loss", mse_loss.avg, epoch)
+    logger.add_scalar("Test PSNR", psnr.avg, epoch)
+    logger.add_scalar("Test Bpp loss", bpp_loss.avg, epoch)
+    logger.add_scalar("Test Aux loss", aux_loss.avg, epoch)
+    logger.add_scalar("lr", lr, epoch)
 
 
 def train(
@@ -303,134 +240,115 @@ def train(
     test_dataloader,
     optimizer,
     aux_optimizer,
-    lr_scheduler,
-    global_step,
     args,
     logger,
 ):
-    compressor.train()
     device = next(compressor.parameters()).device
-    best_loss = float("inf")
 
-    for loop in range(100000):  # infinite loop
-        for i, x in enumerate(tqdm(train_dataloader)):
-            global_step += 1
-            x = x.to(device)
+    # Validation Sanity Check
+    print("Sanity Check")
+    test(
+        -1,
+        test_dataloader,
+        compressor,
+        task_model,
+        criterion,
+        logger,
+        optimizer.param_groups[0]["lr"],
+    )
+    compressor.train()
+    epoch = 0
+    for epoch in tqdm(range(22), leave=True):
+        # 10    ->  15      -> 18   -> 20   -> 22
+        # 1e-4  ->  5e-5    -> 1e-5 -> 5e-6 -> 1e-6
+        if epoch < 10:
+            optimizer.param_groups[0]["lr"] = 1e-4
+        elif epoch < 15:
+            optimizer.param_groups[0]["lr"] = 5e-5
+        elif epoch < 18:
+            optimizer.param_groups[0]["lr"] = 1e-5
+        elif epoch < 20:
+            optimizer.param_groups[0]["lr"] = 5e-6
+        elif epoch < 22:
+            optimizer.param_groups[0]["lr"] = 1e-6
 
-            # Feature extraction
-            with torch.no_grad():
-                features = task_model.input_to_features([{"image": x.squeeze(0)}])[
-                    "data"
-                ]
-                features = [features[f"p{i}"] for i in range(2, 6)]
+        global_step = epoch * len(train_dataloader)
+        with tqdm(train_dataloader, leave=False) as tepoch:
+            for i, x in enumerate(tepoch):
+                global_step += 1
+                x = x.to(device)
 
-            optimizer.zero_grad()
-            aux_optimizer.zero_grad()
+                with torch.no_grad():
+                    features = task_model.input_to_features([{"image": x.squeeze(0)}])[
+                        "data"
+                    ]
+                    features = [features[f"p{i}"] for i in range(2, 6)]
 
-            q = random.randint(0, 7)
-            out_net = compressor(features, quality=q)
-            
-            # both uncompressed and compressed p6 are used to compute losses
-            features.append(F.max_pool2d(features[-1], kernel_size=(2, 2), stride=2))
-            out_net['features'].append(F.max_pool2d(out_net['features'][-1], kernel_size=(2, 2), stride=2))
+                optimizer.zero_grad()
+                aux_optimizer.zero_grad()
 
-            out_criterion = criterion(out_net, features, x.shape, q)
+                q = global_step % 8
+                out_net = compressor(features, quality=q)
 
-            out_criterion["loss"].backward()
-            if args.clip_max_norm > 0:
-                torch.nn.utils.clip_grad_norm_(
-                    compressor.parameters(), args.clip_max_norm
+                features.append(F.max_pool2d(features[-1], kernel_size=(2, 2), stride=2))
+                out_net["features"].append(
+                    F.max_pool2d(out_net["features"][-1], kernel_size=(2, 2), stride=2)
                 )
-            optimizer.step()
 
-            aux_loss = compressor.aux_loss()
-            aux_loss.backward()
-            aux_optimizer.step()
-            psnr = 10 * (torch.log(1 * 1 / out_criterion["mse_loss"]) / math.log(10))
-            # Training log
-            if global_step % 50 == 0:
-                tqdm.write(
-                    f"Train step \t{global_step}: \t["
-                    f"{i * len(x)}/{len(train_dataloader.dataset)}"
-                    f" ({50. * i / len(train_dataloader):.0f}%)]"
-                    f'\tLoss: {out_criterion["loss"].item():.3f} |'
-                    f'\tMSE loss: {out_criterion["mse_loss"].item():.3f} |'
-                    f"\tPSNR: {psnr.item():.3f} |"
-                    f'\tBpp loss: {out_criterion["bpp_loss"].item():.2f} |'
-                    f"\tAux loss: {aux_loss.item():.2f}"
-                )
+                out_criterion = criterion(out_net, features, x.shape, q)
 
-                logger.add_scalar("Loss", out_criterion["loss"].item(), global_step)
-                logger.add_scalar(
-                    "MSE loss", out_criterion["mse_loss"].item(), global_step
-                )
-                logger.add_scalar("PSNR", psnr.item(), global_step)
-                logger.add_scalar(
-                    "Bpp loss", out_criterion["bpp_loss"].item(), global_step
-                )
-                logger.add_scalar("Aux loss", aux_loss.item(), global_step)
+                out_criterion["loss"].backward()
+                if args.clip_max_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(
+                        compressor.parameters(), args.clip_max_norm
+                    )
+                optimizer.step()
 
-            # validation
-            if global_step % args.test_step == 0:
-                loss = test(
-                    global_step,
-                    test_dataloader,
-                    compressor,
-                    task_model,
-                    criterion,
-                    logger,
-                    optimizer.param_groups[0]["lr"],
-                    args,
-                )
-                compressor.train()
+                aux_loss = compressor.aux_loss()
+                aux_loss.backward()
+                aux_optimizer.step()
+                psnr = 10 * (torch.log(1 * 1 / out_criterion["mse_loss"]) / math.log(10))
+                
+                # Training log
+                if global_step % 50 == 0:
+                    logger.add_scalar("Loss", out_criterion["loss"].item(), global_step)
+                    logger.add_scalar("MSE", out_criterion["mse_loss"].item(), global_step)
+                    logger.add_scalar("PSNR", psnr.item(), global_step)
+                    logger.add_scalar("Bpp", out_criterion["bpp_loss"].item(), global_step)
+                    logger.add_scalar("Aux loss", aux_loss.item(), global_step)
 
-                lr_scheduler.step(loss)
-
-                is_best = loss < best_loss
-                if is_best:
-                    print("!!!!!!!!!!!BEST!!!!!!!!!!!!!")
-                best_loss = min(loss, best_loss)
-
-                if global_step % args.save_step == 0:
-                    os.makedirs(args.savedir, exist_ok=True)
-                    save_checkpoint(
-                        {
-                            "global_step": global_step,
-                            "state_dict": compressor.state_dict(),
-                            "loss": loss,
-                            "optimizer": optimizer.state_dict(),
-                            "aux_optimizer": aux_optimizer.state_dict(),
-                            "lr_scheduler": lr_scheduler.state_dict(),
-                        },
-                        is_best,
-                        filename=f"{args.savedir}/{global_step}_checkpoint.pth",
+                tepoch.set_postfix(
+                    loss=out_criterion["loss"].item(),
+                    mse=out_criterion["mse_loss"].item(),
+                    bpp=out_criterion["bpp_loss"].item(),
+                    psnr=psnr.item()
                     )
 
-                if (
-                    optimizer.param_groups[0]["lr"] <= 5e-6
-                    or args.total_step == global_step
-                ):
-                    os.makedirs(args.savedir, exist_ok=True)
-                    print(
-                        f'Finished. \tcurrent lr:{optimizer.param_groups[0]["lr"]} \tglobal step:{global_step}'
-                    )
-                    save_checkpoint(
-                        {
-                            "global_step": global_step,
-                            "state_dict": compressor.state_dict(),
-                            "loss": loss,
-                            "optimizer": optimizer.state_dict(),
-                            "aux_optimizer": aux_optimizer.state_dict(),
-                            "lr_scheduler": lr_scheduler.state_dict(),
-                        },
-                        is_best,
-                        filename=f"{args.savedir}/{global_step}_checkpoint.pth",
-                    )
-                    exit(0)
+            test(
+                epoch,
+                test_dataloader,
+                compressor,
+                task_model,
+                criterion,
+                logger,
+                optimizer.param_groups[0]["lr"],
+            )
+            compressor.train()
 
-
-def save_checkpoint(state, is_best, filename="checkpoint.pth"):
-    torch.save(state, filename)
+            os.makedirs(args.savedir, exist_ok=True)
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "state_dict": compressor.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "aux_optimizer": aux_optimizer.state_dict(),
+                },
+                f"{args.savedir}/epoch={epoch}_checkpoint.pth",
+            )
+            if os.path.exists(
+                f"{args.savedir}/epoch={epoch-1}_checkpoint.pth"
+            ) and os.path.exists(f"{args.savedir}/epoch={epoch}_checkpoint.pth"):
+                os.remove(f"{args.savedir}/epoch={epoch-1}_checkpoint.pth")
 
 
 def build_detectron(task, device):
@@ -445,8 +363,16 @@ def build_detectron(task, device):
     return task_model
 
 
-def build_dataset(args):
+def build_dataset(args, seed):
     # Detectron transform (relies on cv2 instead of Pillow)
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
+    g = torch.Generator()
+    g.manual_seed(seed)
+
     train_transforms = [T.RandomFlip(prob=0.5, horizontal=True, vertical=False)]
 
     train_dataset = OpenImageDatasetFPN(
@@ -458,6 +384,8 @@ def build_dataset(args):
         train_dataset,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        worker_init_fn=seed_worker,
+        generator=g,
         shuffle=True,
         pin_memory=True,
     )
@@ -472,36 +400,34 @@ def build_dataset(args):
     return train_dataloader, test_dataloader
 
 
+def manual_seeds(seed):
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+
 def main(argv):
+    manual_seeds(seed=971231)
     args = parse_args(argv)
-
-    if args.seed is not None:
-        torch.manual_seed(args.seed)
-        random.seed(args.seed)
-
-    print("Dataset load")
-    train_dataloader, test_dataloader = build_dataset(args)
-    logger = SummaryWriter(args.logdir)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print("Model load")
+    print("=" * 50)
+    print(f"Dataset load:\t{args.dataset}")
+    train_dataloader, test_dataloader = build_dataset(args, seed=971231)
+
+    print(f"Model load:\t{LMSFC_V2_FPN_FULL.__name__}")
+    print(f"Task:\t\t{args.task}")
     compressor = LMSFC_V2_FPN_FULL(task=args.task)
     compressor = compressor.to(device)
+    print("=" * 50)
+
 
     task_model = build_detectron(args.task, device)
-    global_step = 0
 
     optimizer, aux_optimizer = configure_optimizers(compressor, args)
-    lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode="min",
-        factor=0.5,
-        patience=round(args.patience / args.test_step) - 1,
-    )
-
     criterion = RateDistortionLoss(task=args.task)
 
-    if args.checkpoint:  # load from previous checkpoint
+    if args.checkpoint:
         print("Loading", args.checkpoint)
         checkpoint = torch.load(args.checkpoint, map_location=device)
         if args.safe_load:
@@ -510,13 +436,11 @@ def main(argv):
             compressor.load_state_dict(checkpoint["state_dict"])
 
         if not args.only_model:
-            global_step = checkpoint["global_step"]
             optimizer.load_state_dict(checkpoint["optimizer"])
             aux_optimizer.load_state_dict(checkpoint["aux_optimizer"])
-            lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
 
-    print(f"Learning rate: {optimizer.param_groups[0]['lr']}")
-
+    logger = SummaryWriter(args.logdir)
+    
     train(
         compressor,
         task_model,
@@ -525,8 +449,6 @@ def main(argv):
         test_dataloader,
         optimizer,
         aux_optimizer,
-        lr_scheduler,
-        global_step,
         args,
         logger,
     )
