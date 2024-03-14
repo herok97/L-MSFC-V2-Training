@@ -9,6 +9,9 @@ tags
 venv*/
 venv/
 
+train/log/*
+train/save/*
+
 examples/
 models/
 weights/
