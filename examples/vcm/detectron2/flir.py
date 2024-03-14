@@ -4,12 +4,12 @@ def getCfgPredictor():
 
     cfg: detectron2.config, predictor: detectron2.DefaultPredictor
     """
-    from detectron2.config import get_cfg
     from detectron2 import model_zoo
+    from detectron2.config import get_cfg
     from detectron2.data.datasets import register_coco_instances
-    from detectron2.engine import DefaultTrainer, DefaultPredictor
-    # from detectron2.data import MetadataCatalog  # , DatasetCatalog
+    from detectron2.engine import DefaultPredictor, DefaultTrainer
 
+    # from detectron2.data import MetadataCatalog  # , DatasetCatalog
     # TODO: set your particular paths
     model_pth="/home/sampsa/silo/interdigital/sync/MPEG_FLIR_anchor/dataset/fine_tuned_model/model_final.pth"
     coco_format_json_filename = "/home/sampsa/silo/interdigital/sync/MPEG_FLIR_anchor/dataset/coco_format_json_annotation/FLIR_val_thermal_coco_format_jpg.json"

@@ -29,12 +29,10 @@
 
 import os
 import warnings
-
 from typing import Dict
 
 import torch
 import torch.nn as nn
-
 from compressai.layers import GDN
 from compressai.models.google import CompressionModel
 from compressai.models.utils import conv, deconv

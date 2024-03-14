@@ -1,4 +1,8 @@
-import argparse, math, random, sys, os
+import argparse
+import math
+import os
+import random
+import sys
 
 sys.path.append(
     os.path.dirname(
@@ -6,23 +10,24 @@ sys.path.append(
     )
 )
 
-from tensorboardX import SummaryWriter
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-from pathlib import Path
-from omegaconf import OmegaConf
+from data.config import model_arch
 
 # Codec
 from data.dataset import OpenImagePexelsDKN
-from data.config import model_arch
+from omegaconf import OmegaConf
 from src.lmsfcv2 import LMSFC_V2_DKN_FULL
+from tensorboardX import SummaryWriter
+from torch.utils.data import DataLoader
+from torchvision.transforms import transforms as T
+from tqdm import tqdm
 
 # Detectron2
 from compressai_vision.config import create_vision_model
-from torchvision.transforms import transforms as T
 
 thisdir = Path(__file__).parent
 config_path = str(thisdir.joinpath("../cfgs").resolve())
@@ -129,9 +134,13 @@ def letterCrop(
 ):  # resize a rectangular image to a padded rectangular
     def get_downsize_multi(x, t):
         for _ in range(t):
-            x = int((x+1) // 2) 
+            x = int((x + 1) // 2)
         return x
-    shape = (input_image_shape[0].item(), input_image_shape[1].item())   # shape = [height, width]
+
+    shape = (
+        input_image_shape[0].item(),
+        input_image_shape[1].item(),
+    )  # shape = [height, width]
     ratio = min(float(height) / shape[0], float(width) / shape[1])
     new_shape = (
         round(shape[1] * ratio),
@@ -142,13 +151,14 @@ def letterCrop(
     dh = (height - new_shape[1]) // 2  # height padding
 
     for i in range(len(features)):
-        l = r = int(-get_downsize_multi(dw, i+3))
-        t = b = int(-get_downsize_multi(dh, i+3))
+        l = r = int(-get_downsize_multi(dw, i + 3))
+        t = b = int(-get_downsize_multi(dh, i + 3))
         features[i] = torch.nn.functional.pad(
             features[i],
             (l, r, t, b),
         )
     return features
+
 
 class RateDistortionLoss(nn.Module):
     """Custom rate distortion loss with a Lagrangian parameter."""
@@ -164,7 +174,6 @@ class RateDistortionLoss(nn.Module):
                 3: 3.0000,
                 4: 7.5000,
                 5: 15.0000,
-                
                 # m65715
                 0: 0.0300,
                 # 1: 0.1500,
@@ -182,7 +191,6 @@ class RateDistortionLoss(nn.Module):
                 # 3: 25.0000,
                 # 4: 65.0000,
                 # 5: 130.0000,
-                
                 # m65715
                 0: 0.5000,
                 1: 1.0000,
@@ -266,8 +274,10 @@ def configure_optimizers(net, args):
 
 
 def save_feature(title, feature):
-    import matplotlib.pyplot as plt
     import os
+
+    import matplotlib.pyplot as plt
+
     feature = feature[0]
     feature = feature[5]
     plt.imshow(feature.detach().cpu().numpy(), cmap=plt.cm.jet)
@@ -281,7 +291,7 @@ def save_feature(title, feature):
     plt.tight_layout()
     plt.title(title)
     plt.show()
-    os.makedirs('./image_result/', exist_ok=True)
+    os.makedirs("./image_result/", exist_ok=True)
     plt.savefig(f"./image_result/{title}.png")
     plt.close()
 
@@ -300,7 +310,7 @@ def test(
     with torch.no_grad():
         for q in range(6):
             for i, x in tqdm(enumerate(test_dataloader)):
-                x = x['img'].to(device)
+                x = x["img"].to(device)
                 x = x.to(device)
                 features = task_model.input_to_features([{"image": x.squeeze(0)}])[
                     "data"
@@ -356,7 +366,7 @@ def train(
     for loop in range(100000):  # infinite loop
         for i, x in enumerate(tqdm(train_dataloader)):
             global_step += 1
-            x = x['img'].to(device)
+            x = x["img"].to(device)
             x = x.to(device)
 
             # Feature extraction

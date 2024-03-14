@@ -290,7 +290,9 @@ def train(
                 q = global_step % 8
                 out_net = compressor(features, quality=q)
 
-                features.append(F.max_pool2d(features[-1], kernel_size=(2, 2), stride=2))
+                features.append(
+                    F.max_pool2d(features[-1], kernel_size=(2, 2), stride=2)
+                )
                 out_net["features"].append(
                     F.max_pool2d(out_net["features"][-1], kernel_size=(2, 2), stride=2)
                 )
@@ -307,22 +309,28 @@ def train(
                 aux_loss = compressor.aux_loss()
                 aux_loss.backward()
                 aux_optimizer.step()
-                psnr = 10 * (torch.log(1 * 1 / out_criterion["mse_loss"]) / math.log(10))
-                
+                psnr = 10 * (
+                    torch.log(1 * 1 / out_criterion["mse_loss"]) / math.log(10)
+                )
+
                 # Training log
                 if global_step % 50 == 0:
                     logger.add_scalar("Loss", out_criterion["loss"].item(), global_step)
-                    logger.add_scalar("MSE", out_criterion["mse_loss"].item(), global_step)
+                    logger.add_scalar(
+                        "MSE", out_criterion["mse_loss"].item(), global_step
+                    )
                     logger.add_scalar("PSNR", psnr.item(), global_step)
-                    logger.add_scalar("Bpp", out_criterion["bpp_loss"].item(), global_step)
+                    logger.add_scalar(
+                        "Bpp", out_criterion["bpp_loss"].item(), global_step
+                    )
                     logger.add_scalar("Aux loss", aux_loss.item(), global_step)
 
                 tepoch.set_postfix(
                     loss=out_criterion["loss"].item(),
                     mse=out_criterion["mse_loss"].item(),
                     bpp=out_criterion["bpp_loss"].item(),
-                    psnr=psnr.item()
-                    )
+                    psnr=psnr.item(),
+                )
 
             test(
                 epoch,
@@ -421,7 +429,6 @@ def main(argv):
     compressor = compressor.to(device)
     print("=" * 50)
 
-
     task_model = build_detectron(args.task, device)
 
     optimizer, aux_optimizer = configure_optimizers(compressor, args)
@@ -440,7 +447,7 @@ def main(argv):
             aux_optimizer.load_state_dict(checkpoint["aux_optimizer"])
 
     logger = SummaryWriter(args.logdir)
-    
+
     train(
         compressor,
         task_model,

@@ -1,22 +1,17 @@
 import torch
+from compressai.ops import ste_round
 
 from .base import BaseCodec
-from compressai.ops import ste_round
 
 # Modules
 from .modules import (
+    Quantizer,
     get_cc_transforms,
     get_context_prediction,
     get_hyper_enc_dec,
     get_paramAggregation,
-    Quantizer,
 )
-from .networks import (
-    DRNet_FPN,
-    FENet_FPN,
-    DRNet_DKN,
-    FENet_DKN,
-)
+from .networks import DRNet_DKN, DRNet_FPN, FENet_DKN, FENet_FPN
 
 
 class LMSFC_V2_FPN_FULL(BaseCodec):

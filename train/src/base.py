@@ -11,11 +11,7 @@ from compressai.models.utils import update_registered_buffers
 from tqdm import tqdm
 
 # Bitstream
-from .utils.stream_helper import (
-    decode_feature,
-    encode_feature,
-    get_downsampled_shape,
-)
+from .utils.stream_helper import decode_feature, encode_feature, get_downsampled_shape
 
 SCALES_MIN = 0.11
 SCALES_MAX = 256

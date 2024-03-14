@@ -1,16 +1,19 @@
-from pathlib import Path
-from torch.utils.data import Dataset
-from PIL import Image
-import torch
-import cv2
-import numpy as np
-import detectron2.data.transforms as T
 import random
+from pathlib import Path
+
+import cv2
+import detectron2.data.transforms as T
+import numpy as np
+import torch
+from PIL import Image
+from torch.utils.data import Dataset
+
 
 def get_downsampled_shape(height, width, p):
     new_h = (height + p - 1) // p * p
     new_w = (width + p - 1) // p * p
     return int(new_h / p + 0.5), int(new_w / p + 0.5)
+
 
 def letterbox(
     img, height=608, width=1088, color=(127.5, 127.5, 127.5)
@@ -52,8 +55,8 @@ class OpenImageDatasetFPN(Dataset):
 
     def __len__(self):
         return len(self.samples)
-    
-    
+
+
 class OpenImagePexelsDKN(Dataset):
     def __init__(self, root, transform=None, split="train"):
         splitdir1 = Path(root) / "openImage" / split
@@ -103,10 +106,9 @@ class OpenImagePexelsDKN(Dataset):
             self.transform(img)
 
         return {
-            'img': img,
-            'ori_img_shape': shape,
+            "img": img,
+            "ori_img_shape": shape,
         }
-            
 
     def __len__(self):
         return len(self.samples)
@@ -150,8 +152,8 @@ class PexelsDKN(Dataset):
         if self.transform is not None:
             self.transform(img)
         return {
-            'img': img,
-            'ori_img_shape': shape,
+            "img": img,
+            "ori_img_shape": shape,
         }
 
     def __len__(self):
