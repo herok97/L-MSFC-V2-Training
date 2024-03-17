@@ -2,6 +2,9 @@
 *.bin
 *.inc
 *.tar.gz
+*.png
+*.jpg
+
 .DS_Store
 builds
 compressai_vision/version.py
