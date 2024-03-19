@@ -17,6 +17,6 @@ model_arch = {
         "nms_thres": 0.4,
         "min_box_area": 200,
         "track_buffer": 30,
-        "frame_rate": 30  # It is odd to consider this at here but following original code.
+        "frame_rate": 30,  # It is odd to consider this at here but following original code.
     },
 }

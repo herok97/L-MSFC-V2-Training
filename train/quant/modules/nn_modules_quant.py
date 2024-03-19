@@ -1,32 +1,36 @@
+from typing import List, Optional
+
 import torch
 import torch.nn as nn
-from torch import Tensor
 import torch.nn.functional as F
-
-from typing import Optional, List
+from torch import Tensor
 
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 
 
-def qconv3x3(in_channels: int, out_channels: int, stride: int = 1, device="cpu") -> nn.Module:
+def qconv3x3(
+    in_channels: int, out_channels: int, stride: int = 1, device="cpu"
+) -> nn.Module:
     return QuantConv2d(
         in_channels=in_channels,
         out_channels=out_channels,
         kernel_size=3,
         stride=stride,
         padding=1,
-        device=device
+        device=device,
     )
 
 
-def qconv1x1(in_channels: int, out_channels: int, stride: int = 1, device="cpu") -> nn.Module:
+def qconv1x1(
+    in_channels: int, out_channels: int, stride: int = 1, device="cpu"
+) -> nn.Module:
     return QuantConv2d(
         in_channels=in_channels,
         out_channels=out_channels,
         kernel_size=1,
         stride=stride,
-        device=device
+        device=device,
     )
 
 
@@ -92,7 +96,7 @@ def quantize_modules(modules):
                     layer.quant_weights()
             else:
                 module.quant_weights()
-            
+
 
 class QuantModule(nn.Module):
     def register_quant_v_params(self, device=None):
@@ -284,6 +288,7 @@ class QuantLeakyReLU(nn.LeakyReLU, QuantModule):
             out = self.quant_input(input)
             return self.quant_forward(out)
 
+
 class QuantReLU(nn.ReLU, QuantModule):
     def __init__(self, inplace: bool = False) -> None:
         super().__init__(inplace)
@@ -293,9 +298,7 @@ class QuantReLU(nn.ReLU, QuantModule):
         self.scale_v = self.compute_scale_v()
 
     def quant_forward(self, x: Tensor) -> Tensor:
-        x = torch.round(F.relu(x, self.inplace)) / (
-            self.scale_v
-        )
+        x = torch.round(F.relu(x, self.inplace)) / (self.scale_v)
         return x.float()
 
     def forward(self, input: Tensor) -> Tensor:
@@ -305,11 +308,12 @@ class QuantReLU(nn.ReLU, QuantModule):
             ).reshape((1))
             self.value_min = torch.min(
                 torch.cat([torch.min(input).reshape((1)), self.value_min], dim=0)
-            ).reshape((1))  
+            ).reshape((1))
             return F.relu(input, self.inplace)
         else:
             out = self.quant_input(input)
             return self.quant_forward(out)
+
 
 class QuantCheckboardMaskedConv2d(QuantConv2d):
     def __init__(self, *args, **kwargs):

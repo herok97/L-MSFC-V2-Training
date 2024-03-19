@@ -1,28 +1,25 @@
+import math
+
 import torch
 import torch.nn as nn
 from compressai.ans import BufferedRansEncoder, RansDecoder
 from compressai.models.priors import CompressionModel, GaussianConditional
 from compressai.models.utils import update_registered_buffers
-from tqdm import tqdm
-import math
-
-from modules.nn_modules import conv3x3, conv
+from modules.nn_modules import conv, conv3x3
 from modules.nn_modules_quant import (
     QuantCheckboardMaskedConv2d,
     QuantReLU,
+    prepare_quant_modules,
     qconv,
     qconv1x1,
     qconv3x3,
     qdeconv,
-    prepare_quant_modules,
     quantize_modules,
 )
+from tqdm import tqdm
 
-from utils.readwrite import (
-    decode_feature,
-    encode_feature,
-    get_downsampled_shape,
-)
+from utils.readwrite import decode_feature, encode_feature, get_downsampled_shape
+
 
 class QuantSCCTX(CompressionModel):
     def __init__(self, N=192, M=320, task=None, **kwargs):
@@ -96,11 +93,26 @@ class QuantSCCTX(CompressionModel):
         self.stream = None
 
     def prepare_quant_modules(self, nbit):
-        prepare_quant_modules(modules=[self.h_s, self.cc_transforms, self.context_prediction, self.ParamAggregation], nbit=nbit)
+        prepare_quant_modules(
+            modules=[
+                self.h_s,
+                self.cc_transforms,
+                self.context_prediction,
+                self.ParamAggregation,
+            ],
+            nbit=nbit,
+        )
 
     def quantize_model(self):
-        quantize_modules(modules=[self.h_s, self.cc_transforms, self.context_prediction, self.ParamAggregation])
-        
+        quantize_modules(
+            modules=[
+                self.h_s,
+                self.cc_transforms,
+                self.context_prediction,
+                self.ParamAggregation,
+            ]
+        )
+
     def compress(self, y):
         B, C, H, W = y.size()
         z = self.h_a(y)
@@ -160,11 +172,8 @@ class QuantSCCTX(CompressionModel):
                 )
             )
             y_anchor = y_slices[slice_index].clone()
-            
-            (
-                means_anchor,
-                scales_anchor,
-            ) = self.ParamAggregation[slice_index](
+
+            (means_anchor, scales_anchor,) = self.ParamAggregation[slice_index](
                 torch.concat([ctx_params_anchor_split[slice_index], support], dim=1)
             ).chunk(2, 1)
 
@@ -332,10 +341,7 @@ class QuantSCCTX(CompressionModel):
                     dim=1,
                 )
             )
-            (
-                means_anchor,
-                scales_anchor,
-            ) = self.ParamAggregation[slice_index](
+            (means_anchor, scales_anchor,) = self.ParamAggregation[slice_index](
                 torch.concat([ctx_params_anchor_split[slice_index], support], dim=1)
             ).chunk(2, 1)
 

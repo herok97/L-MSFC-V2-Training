@@ -373,9 +373,13 @@ class VTM(nn.Module):
         print(f"\n-- encoding ${file_prefix}", file=sys.stdout)
 
         if img_input:
-            (yuv_in_path, nb_frames, frame_width, frame_height, file_prefix) = (
-                self.convert_input_to_yuv(input=x, file_prefix=file_prefix)
-            )
+            (
+                yuv_in_path,
+                nb_frames,
+                frame_width,
+                frame_height,
+                file_prefix,
+            ) = self.convert_input_to_yuv(input=x, file_prefix=file_prefix)
 
         else:
             (

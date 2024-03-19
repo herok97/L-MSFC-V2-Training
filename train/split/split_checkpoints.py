@@ -1,15 +1,19 @@
-import torch
-from structures import FENet, DRNet, LMSFC_V2_CODEC
+import argparse
+import os
 from pathlib import Path
-import argparse, os
+
+import torch
+from structures import LMSFC_V2_CODEC, DRNet, FENet
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint', type=str, required=True)
-    parser.add_argument('--task', type=str, required=True)
-    parser.add_argument('--result_path', type=str, required=True)
+    parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument("--task", type=str, required=True)
+    parser.add_argument("--result_path", type=str, required=True)
     args = parser.parse_args()
     return args
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -19,11 +23,11 @@ if __name__ == "__main__":
         "hieve": "alt1",
         "tvd": "dn53",
     }[args.task]
-    
+
     path = Path(args.checkpoint)
     ckpt = torch.load(path)
-    if 'state_dict' in list(ckpt.keys()):
-        ckpt = ckpt['state_dict']
+    if "state_dict" in list(ckpt.keys()):
+        ckpt = ckpt["state_dict"]
 
     fenet_dict = FENet(task=split).state_dict()
     drnet_dict = DRNet(task=split).state_dict()
@@ -45,7 +49,7 @@ if __name__ == "__main__":
             inner_dict[k] = v
         else:
             NotImplementedError
-    
+
     os.makedirs(args.result_path, exist_ok=True)
     torch.save(fenet_dict, f"{args.result_path}/fenet_{split}.pth")
     torch.save(drnet_dict, f"{args.result_path}/drnet_{split}.pth")

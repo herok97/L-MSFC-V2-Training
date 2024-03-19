@@ -1,13 +1,10 @@
-import torch.nn.functional as F
-import torch.nn as nn
-import torch
 import math
 
-from modules.nn_modules import (
-    AttentionBlock,
-    TripleResBlock,
-    conv,
-)
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from modules.nn_modules import AttentionBlock, TripleResBlock, conv
+
 
 class FENet(nn.Module):
     def __init__(self, N=192, M=320, split_ctx=None, quality=None, config=None):

@@ -115,10 +115,7 @@ class LMSFC_V2_FPN_FULL(BaseCodec):
             )
             ### checkboard process 1
             y_anchor = anchor_split[slice_index]
-            (
-                means_anchor,
-                scales_anchor,
-            ) = self.ParamAggregation[slice_index](
+            (means_anchor, scales_anchor,) = self.ParamAggregation[slice_index](
                 torch.concat([ctx_params_anchor_split[slice_index], support], dim=1)
             ).chunk(2, 1)
 
@@ -361,10 +358,7 @@ class LMSFC_V2_DKN_FULL(BaseCodec):
             )
             ### checkboard process 1
             y_anchor = anchor_split[slice_index]
-            (
-                means_anchor,
-                scales_anchor,
-            ) = self.ParamAggregation[slice_index](
+            (means_anchor, scales_anchor,) = self.ParamAggregation[slice_index](
                 torch.concat([ctx_params_anchor_split[slice_index], support], dim=1)
             ).chunk(2, 1)
 

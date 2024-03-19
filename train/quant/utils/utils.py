@@ -1,8 +1,7 @@
 import cv2
 
-def letterbox(
-    img, height=608, width=1088, color=(127.5, 127.5, 127.5)
-):  
+
+def letterbox(img, height=608, width=1088, color=(127.5, 127.5, 127.5)):
     shape = img.shape[:2]
     ratio = min(float(height) / shape[0], float(width) / shape[1])
     new_shape = (

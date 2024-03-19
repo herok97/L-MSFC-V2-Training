@@ -372,7 +372,6 @@ def build_detectron(task, device):
 
 
 def build_dataset(args, seed):
-    # Detectron transform (relies on cv2 instead of Pillow)
     def seed_worker(worker_id):
         worker_seed = torch.initial_seed() % 2**32
         np.random.seed(worker_seed)
@@ -381,6 +380,7 @@ def build_dataset(args, seed):
     g = torch.Generator()
     g.manual_seed(seed)
 
+    # Detectron transform (relies on cv2 instead of Pillow)
     train_transforms = [T.RandomFlip(prob=0.5, horizontal=True, vertical=False)]
 
     train_dataset = OpenImageDatasetFPN(

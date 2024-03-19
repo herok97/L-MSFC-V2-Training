@@ -1,25 +1,15 @@
-import torch
-import torch.nn as nn
-from tqdm import tqdm
 import math
 
+import torch
+import torch.nn as nn
 from compressai.ans import BufferedRansEncoder, RansDecoder
 from compressai.models.priors import CompressionModel, GaussianConditional
 from compressai.models.utils import update_registered_buffers
-from modules.nn_modules import (
-    conv3x3,
-    conv,
-    conv1x1,
-    conv3x3,
-    deconv,
-    CheckboardMaskedConv2d,
-)
+from modules.nn_modules import CheckboardMaskedConv2d, conv, conv1x1, conv3x3, deconv
+from tqdm import tqdm
 
-from utils.readwrite import (
-    decode_feature,
-    encode_feature,
-    get_downsampled_shape,
-)
+from utils.readwrite import decode_feature, encode_feature, get_downsampled_shape
+
 
 class SCCTX(CompressionModel):
     def __init__(self, N=192, M=320, task=None, **kwargs):
@@ -151,10 +141,7 @@ class SCCTX(CompressionModel):
                 )
             )
             y_anchor = y_slices[slice_index].clone()
-            (
-                means_anchor,
-                scales_anchor,
-            ) = self.ParamAggregation[slice_index](
+            (means_anchor, scales_anchor,) = self.ParamAggregation[slice_index](
                 torch.concat([ctx_params_anchor_split[slice_index], support], dim=1)
             ).chunk(2, 1)
 
@@ -322,10 +309,7 @@ class SCCTX(CompressionModel):
                     dim=1,
                 )
             )
-            (
-                means_anchor,
-                scales_anchor,
-            ) = self.ParamAggregation[slice_index](
+            (means_anchor, scales_anchor,) = self.ParamAggregation[slice_index](
                 torch.concat([ctx_params_anchor_split[slice_index], support], dim=1)
             ).chunk(2, 1)
 
