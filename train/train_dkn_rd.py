@@ -31,6 +31,7 @@ def parse_args(argv):
     parser = argparse.ArgumentParser(description="Example training script.")
     # ---------------------- Main Arguments ---------------------------------|
     parser.add_argument("-t", "--task", type=str, help="TVD or HiEve")
+    parser.add_argument("-rc", "--random_crop", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=1, help="Batch size")
     parser.add_argument(
         "--test-batch-size",
@@ -41,14 +42,11 @@ def parse_args(argv):
         "-d",
         "--dataset",
         type=str,
-        default="/data/data/openImage/",
+        default="/data/dataset/",
         help="Dataset path, Note that 'openImage/train' and 'openImage/val' directories should exist",
     )
     parser.add_argument(
         "-s", "--safe_load", type=int, default=0, help="1 for safe load"
-    )
-    parser.add_argument(
-        "-p", "--patience", type=int, default=50000, help="patience of scheduler"
     )
     parser.add_argument(
         "-o", "--only_model", type=int, default=0, help="Load only model weights"
@@ -204,7 +202,7 @@ def test(epoch, test_dataloader, compressor, task_model, criterion, logger, lr):
                 features = task_model.input_to_features([{"image": x.squeeze(0)}])[
                     "data"
                 ]
-                features = [features[f"p{i}"] for i in range(2, 6)]
+                features = [features[i] for i in features]
 
                 out_net = compressor(features, quality=q)
                 out_criterion = criterion(out_net, features, x.shape, q)
@@ -383,7 +381,7 @@ def build_dataset(args, seed):
         ]
     )
     train_dataset = OpenImagePexelsDKN(
-        args.dataset, transform=train_transforms, split="train"
+        args.dataset, transform=train_transforms, split="train", random_crop_mode=args.random_crop
     )
     test_dataset = OpenImagePexelsDKN(args.dataset, split="val")
 

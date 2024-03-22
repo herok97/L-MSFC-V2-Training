@@ -58,7 +58,8 @@ class OpenImageDatasetFPN(Dataset):
 
 
 class OpenImagePexelsDKN(Dataset):
-    def __init__(self, root, transform=None, split="train"):
+    def __init__(self, root, transform=None, split="train", random_crop_mode=True):
+        self.random_crop_mode = random_crop_mode
         splitdir1 = Path(root) / "openImage" / split
         splitdir2 = Path(root) / "pexels" / split
 
@@ -95,7 +96,8 @@ class OpenImagePexelsDKN(Dataset):
     def __getitem__(self, index):
         img0 = cv2.imread(str(self.samples[index]))
         if self.mode == "train" and index > len(self.samples1):
-            img0 = self.random_crop(img0)
+            if self.random_crop_mode:
+                img0 = self.random_crop(img0)
 
         img, _, _, _, shape = letterbox(img0)
         img = img[:, :, ::-1].transpose(2, 0, 1)
@@ -105,10 +107,7 @@ class OpenImagePexelsDKN(Dataset):
         if self.transform is not None:
             self.transform(img)
 
-        return {
-            "img": img,
-            "ori_img_shape": shape,
-        }
+        return img
 
     def __len__(self):
         return len(self.samples)
